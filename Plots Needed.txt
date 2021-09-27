@@ -1,0 +1,22 @@
+1. Increasing Error by Week
+the new graph type( std dev )
+2. MAPE in Predictions
+Rainbow bar graph type (ordered)
+Per wave and overall
+by Model Type (ML, EPI, Hybrid, Ensemble) and overall
+Baseline1 -> shift cases by 4week (COVIDhub-baseline => stand out )
+Baseline2 -> extrapolation of trend line with
+slope of 1 week (current - last wk) chg in cases
+3. Model Peak Timing Accuracy Comparison
+the new graph type( std dev ) [ explore more options ]
+4. Stability Comparison of Models
+Strong exlusion criteria ( atleast 3 predictions per wave )
+Think on how to visalize ( bin, rank order etc )
+5.  Comparison of ensemble and ensemble subtypes (which ensemble produces the most accurate data)
+Weighted by historical rank, using all models above baseline
+Do last based on comprehension from other visuals
+
+
+
+
+
