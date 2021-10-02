@@ -1,4 +1,4 @@
-name: Pylint
+name: CDC Data Pull
 
 on: [push]
 
@@ -25,4 +25,9 @@ jobs:
     - name: Processing Data
       run: |
         python scripts/process_cdc.py
-
+        
+    - name: Commit Processed Data
+      run: |
+        git add processed-data/cdc-inc-cases.csv
+        git commit -m "updating cdc model forecast data"
+        git push
