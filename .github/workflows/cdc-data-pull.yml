@@ -25,5 +25,4 @@ jobs:
     - name: Processing Data
       run: |
         python scripts/process_cdc.py
-      
-      python scripts/process_cdc.py
+
