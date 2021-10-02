@@ -20,4 +20,6 @@ jobs:
         
     - name: Cloning CDC Repo
       run: |
-        git clone https://github.com/reichlab/covid19-forecast-hub/
+        git clone --depth 1  --filter=blob:none  --sparse https://github.com/reichlab/covid19-forecast-hub/tree/master/data-processed
+        cd covid19-forecast-hub
+        git sparse-checkout set small
