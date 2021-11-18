@@ -3,8 +3,9 @@ import glob
 import matplotlib.pyplot as plt 
 import numpy as np
 from datetime import datetime, timedelta
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
-def get_cdc_dataframe():
+def get_cdc_dataframe_old():
     path = 'CDC-Cases-Forecast'
     all_files = glob.glob(path + "/*.csv")
     li = []
@@ -17,9 +18,25 @@ def get_cdc_dataframe():
     cdc_frames.point =cdc_frames.point/7
     return cdc_frames
 
+def get_cdc_dataframe():
+    path = 'processed_data/cdc-inc-cases.csv'
+    cdc_frames = pd.read_csv(path)
+    allowed_forecast_dates = cdc_frames[cdc_frames.Model=="COVIDhub-baseline"].forecast_date.unique()
+    new_allowed_forecast_dates = []
+    # add 1 day to every baseline forecast day to account for submissions on both sunday and monday
+    for date in allowed_forecast_dates:
+        new_allowed_forecast_dates.append(date)
+        new_allowed_forecast_dates.append(add_days(date,-1))
+
+    allowed_target_dates = cdc_frames[cdc_frames.Model=="COVIDhub-baseline"].target_end_date.unique()
+    cdc_frames = cdc_frames[cdc_frames['forecast_date'].isin(new_allowed_forecast_dates)]
+    cdc_frames = cdc_frames[cdc_frames['target_end_date'].isin(allowed_target_dates)]
+    cdc_frames.point =cdc_frames.point/7
+    return cdc_frames
+
     
 def get_jhu_dataframe():
-    jhu = pd.read_csv("jhu-us.csv")
+    jhu = pd.read_csv("processed_data/jhu-us.csv")
     jhu.Date=pd.to_datetime(jhu.Date)
     jhu = jhu.set_index("Date", drop=True)
     return jhu.sort_index(ascending=True)
@@ -49,6 +66,8 @@ def get_jhu_dataframe_weekly():
     for target_date in cdc_frames.target_end_date.unique():
         if not target_date in jhu_frames.index:
             continue
+        if target_date in jhu_weekly:
+            continue
         weeklySum = jhu_frames.loc[target_date].NewCases
         for i in range(6):
             pastDate = add_days(target_date, -(i+1))
@@ -58,6 +77,7 @@ def get_jhu_dataframe_weekly():
     jhu_weekly_df = jhu_weekly_df.reset_index()
     jhu_weekly_df = jhu_weekly_df.rename(columns={"index": "target_end_date"})
     jhu_weekly_df.target_end_date=pd.to_datetime(jhu_weekly_df.target_end_date)
+    jhu_weekly_df = (jhu_weekly_df.drop_duplicates(subset='target_end_date', keep='last'))
     jhu_weekly_df = jhu_weekly_df.set_index("target_end_date", drop=True).sort_index(ascending=True)
     return jhu_weekly_df
 
@@ -72,12 +92,19 @@ def get_linear_baseline():
 
         if prevPrevDate in jhu_weekly.index and prevDate in jhu_weekly.index:
             baseline2[date] = jhu_weekly.loc[prevDate, "WeeklyCases"] + 4*(jhu_weekly.loc[prevDate, "WeeklyCases"] - jhu_weekly.loc[prevPrevDate, "WeeklyCases"])
-    return pd.DataFrame.from_dict(baseline2,orient='index', columns=['point']).sort_index(ascending=True)
+    baseline =  pd.DataFrame.from_dict(baseline2, orient='index', columns=['point']).sort_index(ascending=True)
+    baseline = baseline.reset_index()
+    baseline = baseline.rename(columns={"index": "target_end_date"})
+    baseline.target_end_date=pd.to_datetime(baseline.target_end_date)
+    baseline = baseline.set_index("target_end_date", drop=True).sort_index(ascending=True)
+    baseline.point = pd.to_numeric(baseline.point, downcast="float")
+    return baseline
 
 
 def get_model_by_date_range(model, cdc_frames, horizon, start=None, end = None):
     model_frame = cdc_frames[(cdc_frames["Model"]==model) & (cdc_frames["target"] == str(horizon) + " wk ahead inc case")][["target_end_date", "point"]]
     model_frame.target_end_date=pd.to_datetime(model_frame.target_end_date)
+    model_frame = (model_frame.drop_duplicates(subset='target_end_date', keep='last'))
     model_frame = model_frame.set_index("target_end_date", drop=True)
     model_frame = model_frame.sort_index()
     if start is not None and end is not None:
@@ -87,10 +114,13 @@ def get_model_by_date_range(model, cdc_frames, horizon, start=None, end = None):
 
 def get_mae(model_frame,jhu_weekly_df, start, end):
     model_target_df = model_frame[(model_frame.index >= start) & (model_frame.index <= end)]
-    target_dates = model_target_df.index.unique()
-    jnu_target_df = jhu_weekly_df.loc[list(target_dates)]
-    jnu_target_df.diff = 100*abs(model_target_df.point - jnu_target_df.WeeklyCases)/jnu_target_df.WeeklyCases
-    return round(jnu_target_df.diff.mean(),2), len(jnu_target_df)
+    target_dates = jhu_weekly_df.index.intersection(set(model_target_df.index.unique()))
+    if len(target_dates) == 0:
+        return 0,0
+    jnu_target_df = jhu_weekly_df.loc[target_dates]
+    
+    jnu_target_df["error"] = 100*abs(model_target_df.point - jnu_target_df.WeeklyCases)/jnu_target_df.WeeklyCases
+    return round(jnu_target_df.error.mean(),2), len(jnu_target_df)
 
 
 
